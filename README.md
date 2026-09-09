@@ -58,8 +58,8 @@ open TigerQuickLook.app
 ### 4. プレビューする
 
 Finder を最前面にしてファイルを1つ選び、**Space**。もう一度 **Space**
-(またはウィンドウで **Esc**)で閉じる。対応は **JPG / PNG / PDF / TXT** のみ。
-それ以外を選んで Space を押しても何も起きない。
+(またはウィンドウで **Esc**)で閉じる。対応形式は下の「対応形式」を参照。
+対象外を選んで Space を押しても何も起きない。
 
 ### 制限
 
@@ -107,14 +107,21 @@ MIT License — [`LICENSE`](LICENSE) を参照。
 Mac OS X 10.4 Tiger機の上でネイティブに動く、軽量なQuick Look代替アプリ。
 Quick Look自体はLeopard(10.5)からの機能なので、Tigerには存在しない。
 
-対応フォーマットは意図的に絞る。**深追いしない。**
+## 対応形式
 
-- JPG
-- PDF
-- PNG
-- TXT
+「ちゃんと表示する」より **「タイトルだけでは思い出せないファイルの中身確認」**
+が目的。整形せず中身の文字列が出れば十分、という割り切り。
 
-これ以上は広げない。
+| 種別 | 形式 | 方法 |
+|---|---|---|
+| 画像 | JPG / PNG / PDF / TIFF / GIF / BMP | ImageIO・Quartz を直接。PDF は1ページ目のみ |
+| テキスト | TXT / MD / CSV / JSON / XML / 各種ソース等、拡張子を広く | 先頭64KBをそのまま等幅表示 |
+| 拡張子なし | — | 中身がテキストっぽければテキスト表示 |
+| 旧 Office | **DOC** (Word 2004等) / RTF / HTML | Tiger 標準の `textutil -convert txt` |
+| 新 Office | **DOCX / PPTX / XLSX** / ODT / ODS / ODP | ZIP から本文XMLを `unzip -p` → タグ除去 |
+
+対応しないもの: RAW、レイアウトの再現、複数ページ・複数シートの網羅。
+追加ライブラリは使わない(外部依存は Tiger 同梱の `textutil` / `unzip` のみ)。
 
 ## なぜやる価値があるか
 

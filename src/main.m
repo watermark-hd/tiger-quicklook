@@ -1,9 +1,18 @@
 /*
  * Tiger QuickLook — OSX 10.4 Tiger向けの、ごく軽量なQuick Look代替。
  *
- * 対応フォーマットは意図的にJPG/PNG/PDF/TXTの4つだけに絞る(深追いしない)。
- * PDFKitはLeopard以降の機能でTigerには存在しないため、Tiger標準の
- * ImageIO(CGImageSource)とQuartz(CGPDFDocument)を直接使う。
+ * 中心は JPG/PNG/PDF/TXT。PDFKitはLeopard以降の機能でTigerには存在しない
+ * ため、Tiger標準のImageIO(CGImageSource)とQuartz(CGPDFDocument)を直接使う。
+ *
+ * v0.2 で対応形式を拡張:
+ *   - 画像: TIFF/GIF/BMP も ImageIO でそのまま。
+ *   - プレーンテキスト: .md や .csv/.json/.xml/各種ソース等、拡張子を広く許可。
+ *     拡張子が無い/未知でも、中身がテキストっぽければ表示する。
+ *   - 旧Word(.doc)/RTF/HTML: Tiger標準の `textutil -convert txt` で変換。
+ *   - .docx/.pptx/.xlsx/.odt/.ods/.odp: 中身のZIPから本文XMLを `unzip -p` で
+ *     取り出し、タグを剥がして文字列だけ表示する(整形はしない。
+ *     「タイトルだけでは思い出せないファイルの中身確認」が目的)。
+ *   いずれも追加ライブラリ無し。外部依存は Tiger 同梱の textutil / unzip のみ。
  *
  * 重さを避けるための方針:
  *   - 画像はフル解像度でデコードしてから縮小するのではなく、
@@ -281,6 +290,232 @@ static CGPDFDocumentRef TQLCreatePDFDocument(NSString *path)
 }
 
 
+#pragma mark - テキスト系ヘルパー(拡張子判定 / 外部ツール / タグ除去)
+
+// ── 拡張子グループ。半角スペース区切りの1文字列に対する所属チェックだけで済ませ、
+//    静的NSArray/NSSetのライフサイクルを持ち込まない。
+static BOOL TQLExtIn(NSString *ext, const char *spaceSeparatedList)
+{
+    if ([ext length] == 0) {
+        return NO;
+    }
+    NSString *hay = [NSString stringWithFormat:@" %s ", spaceSeparatedList];
+    NSString *needle = [NSString stringWithFormat:@" %@ ", ext];
+    return [hay rangeOfString:needle].location != NSNotFound;
+}
+
+// ImageIO(CGImageSource)がTigerでそのまま扱える画像。
+#define TQL_IMAGE_EXTS   "jpg jpeg jpe png gif bmp tif tiff"
+// Tiger標準の textutil -convert txt が読めるもの(旧Word .doc、RTF、HTML等)。
+#define TQL_TEXTUTIL_EXTS "doc rtf rtfd html htm webarchive"
+// 中身がZIP+XMLの新形式(Office Open XML / OpenDocument)。unzip + タグ除去で本文だけ抜く。
+#define TQL_OFFICEZIP_EXTS "docx docm dotx pptx pptm ppsx xlsx xlsm odt ott odp otp ods ots"
+// そのまま等幅で表示してよいプレーンテキスト系。整形はしない。
+#define TQL_TEXT_EXTS \
+  "txt text md markdown mkd mdown rst csv tsv tab log json ndjson xml plist " \
+  "yaml yml toml ini conf cfg properties env strings srt vtt ass sub " \
+  "sh bash zsh fish command bat cmd ps1 pl pm py pyw rb lua tcl php " \
+  "js jsx mjs cjs ts tsx css scss sass less styl svg " \
+  "c h m mm cpp cxx cc hpp hh hxx java kt kts swift go rs sql r " \
+  "diff patch gitignore gitattributes gitconfig editorconfig dockerfile " \
+  "makefile mk cmake gradle asc nfo tex bib org adoc"
+
+typedef enum {
+    kTQLKindUnsupported = 0,
+    kTQLKindImage,
+    kTQLKindPDF,
+    kTQLKindText,       // 直接読んでそのまま表示
+    kTQLKindTextutil,   // textutil -convert txt を通す
+    kTQLKindOfficeZip   // unzip で本文XMLを取り出しタグ除去
+} TQLKind;
+
+// 先頭8KBを覗いて「テキストとして表示してよさそうか」を判定する。
+// 拡張子が無い/未知のファイル向けのフォールバック。
+static BOOL TQLLooksLikeText(NSString *path)
+{
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (fh == nil) {
+        return NO;
+    }
+    NSData *data = [fh readDataOfLength:8192];
+    [fh closeFile];
+    unsigned n = [data length];
+    if (n == 0) {
+        return NO;
+    }
+
+    // UTF-8として素直に読めて、NULを含まなければテキスト扱い。
+    NSString *asUTF8 = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    if (asUTF8 != nil && [asUTF8 rangeOfString:@"\0"].location == NSNotFound) {
+        return YES;
+    }
+
+    // UTF-8でないなら、バイトを見て制御文字の比率で判断する
+    // (Shift_JIS等の日本語テキストを許容するため)。
+    const unsigned char *b = (const unsigned char *)[data bytes];
+    unsigned bad = 0;
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        unsigned char c = b[i];
+        if (c == 0) {
+            return NO; // NULが1つでもあればバイナリ扱い
+        }
+        if (c < 0x09 || (c > 0x0D && c < 0x20)) {
+            bad++;
+        }
+    }
+    return (bad * 100 < n * 3); // 制御文字が3%未満ならテキストとみなす
+}
+
+// パスからプレビュー種別を決める。
+static TQLKind TQLKindForPath(NSString *path)
+{
+    NSString *ext = [[path pathExtension] lowercaseString];
+
+    if ([ext isEqualToString:@"pdf"])         return kTQLKindPDF;
+    if (TQLExtIn(ext, TQL_IMAGE_EXTS))        return kTQLKindImage;
+    if (TQLExtIn(ext, TQL_TEXTUTIL_EXTS))     return kTQLKindTextutil;
+    if (TQLExtIn(ext, TQL_OFFICEZIP_EXTS))    return kTQLKindOfficeZip;
+    if (TQLExtIn(ext, TQL_TEXT_EXTS))         return kTQLKindText;
+
+    // 拡張子が無い / 未知 → 中身がテキストっぽければ出す。
+    if (TQLLooksLikeText(path))               return kTQLKindText;
+    return kTQLKindUnsupported;
+}
+
+// 外部コマンドを実行して標準出力を文字列で受け取る。
+// maxBytesを超えたら打ち切る。失敗時はnil。
+static NSString *TQLRunTool(NSString *launchPath, NSArray *args, unsigned maxBytes)
+{
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:launchPath]) {
+        return nil;
+    }
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    NSPipe *pipe = [NSPipe pipe];
+    [task setLaunchPath:launchPath];
+    [task setArguments:args];
+    [task setStandardOutput:pipe];
+    [task setStandardError:[NSFileHandle fileHandleWithNullDevice]]; // stderrは捨てる
+
+    NS_DURING
+        [task launch];
+    NS_HANDLER
+        return nil;
+    NS_ENDHANDLER
+
+    NSFileHandle *rd = [pipe fileHandleForReading];
+    NSMutableData *acc = [NSMutableData data];
+    NS_DURING
+        NSData *chunk;
+        while ((chunk = [rd readDataOfLength:65536]) != nil && [chunk length] > 0) {
+            [acc appendData:chunk];
+            if ([acc length] >= maxBytes) {
+                [task terminate];
+                break;
+            }
+        }
+    NS_HANDLER
+        ;
+    NS_ENDHANDLER
+    NS_DURING [task waitUntilExit]; NS_HANDLER ; NS_ENDHANDLER
+
+    if ([acc length] == 0) {
+        return nil;
+    }
+    NSString *s = [[[NSString alloc] initWithData:acc encoding:NSUTF8StringEncoding] autorelease];
+    if (s == nil) {
+        s = [[[NSString alloc] initWithData:acc encoding:NSShiftJISStringEncoding] autorelease];
+    }
+    return s;
+}
+
+// NSMutableString 上で全置換する小ヘルパー。
+// stringByReplacingOccurrencesOfString:withString: は 10.5 以降なので使わない。
+static void TQLReplaceAll(NSMutableString *s, NSString *from, NSString *to)
+{
+    [s replaceOccurrencesOfString:from withString:to
+                          options:0 range:NSMakeRange(0, [s length])];
+}
+
+// XML風のテキストからタグを剥がして本文だけにする。整形はしない
+// (「何のファイルか」が分かれば十分、という割り切り)。
+static NSString *TQLStripXMLTags(NSString *xml)
+{
+    if (xml == nil) {
+        return nil;
+    }
+    NSMutableString *m = [[xml mutableCopy] autorelease];
+
+    // 段落・改行に相当する閉じタグを改行へ。docx / pptx / ODF をまとめて面倒みる。
+    TQLReplaceAll(m, @"</w:p>", @"\n");
+    TQLReplaceAll(m, @"</a:p>", @"\n");
+    TQLReplaceAll(m, @"</text:p>", @"\n");
+    TQLReplaceAll(m, @"</text:h>", @"\n");
+    TQLReplaceAll(m, @"<w:br/>", @"\n");
+    TQLReplaceAll(m, @"<w:br />", @"\n");
+    TQLReplaceAll(m, @"<a:br/>", @"\n");
+    TQLReplaceAll(m, @"<text:line-break/>", @"\n");
+    TQLReplaceAll(m, @"</tr>", @"\n");
+    TQLReplaceAll(m, @"<w:tab/>", @"\t");
+
+    // <...> を全部落とす。
+    NSMutableString *out = [NSMutableString stringWithCapacity:[m length]];
+    unsigned i, len = [m length];
+    BOOL inTag = NO;
+    for (i = 0; i < len; i++) {
+        unichar ch = [m characterAtIndex:i];
+        if (inTag) {
+            if (ch == '>') inTag = NO;
+        } else if (ch == '<') {
+            inTag = YES;
+        } else {
+            [out appendFormat:@"%C", ch];
+        }
+    }
+
+    // 主要な実体参照を戻す。
+    TQLReplaceAll(out, @"&lt;",   @"<");
+    TQLReplaceAll(out, @"&gt;",   @">");
+    TQLReplaceAll(out, @"&quot;", @"\"");
+    TQLReplaceAll(out, @"&apos;", @"'");
+    TQLReplaceAll(out, @"&#39;",  @"'");
+    TQLReplaceAll(out, @"&amp;",  @"&");
+
+    // 空行が続きすぎるのを潰す。
+    while ([out replaceOccurrencesOfString:@"\n\n\n" withString:@"\n\n"
+                                  options:0 range:NSMakeRange(0, [out length])] > 0) {
+        ;
+    }
+    return [out stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
+// docx / pptx / xlsx / odt / ods / odp の中から本文XMLを unzip -p で取り出し、
+// タグを剥がして返す。
+static NSString *TQLTextFromOfficeZip(NSString *path)
+{
+    NSString *ext = [[path pathExtension] lowercaseString];
+    NSString *member = nil;
+    if ([ext hasPrefix:@"doc"] || [ext hasPrefix:@"dot"]) {
+        member = @"word/document.xml";
+    } else if ([ext hasPrefix:@"ppt"] || [ext hasPrefix:@"pps"]) {
+        member = @"ppt/slides/slide*.xml";
+    } else if ([ext hasPrefix:@"xls"]) {
+        member = @"xl/sharedStrings.xml";     // セルの文字列。識別用には十分
+    } else {
+        member = @"content.xml";              // OpenDocument 全般
+    }
+
+    NSString *raw = TQLRunTool(@"/usr/bin/unzip",
+        [NSArray arrayWithObjects:@"-p", path, member, nil], 1024 * 1024);
+    NSString *text = TQLStripXMLTags(raw);
+    if ([text length] == 0) {
+        return nil;
+    }
+    return text;
+}
+
+
 #pragma mark - アプリ本体
 
 @interface TQLAppDelegate : NSObject
@@ -303,6 +538,14 @@ static CGPDFDocumentRef TQLCreatePDFDocument(NSString *path)
 - (void)setLaunchFilePath:(NSString *)path;
 - (void)showPreviewForPath:(NSString *)path;
 - (void)dismissPreview;
+// プレビューウィンドウの組み立て(表示は showPreviewForPath: がまとめて行う)
+- (BOOL)buildImageWindowForPath:(NSString *)path filename:(NSString *)filename;
+- (BOOL)buildPDFWindowForPath:(NSString *)path filename:(NSString *)filename;
+- (BOOL)buildTextWindowForPath:(NSString *)path filename:(NSString *)filename;
+- (BOOL)buildTextutilWindowForPath:(NSString *)path filename:(NSString *)filename;
+- (BOOL)buildOfficeZipWindowForPath:(NSString *)path filename:(NSString *)filename;
+- (BOOL)buildTextWindowWithString:(NSString *)text filename:(NSString *)filename;
+- (BOOL)canPreviewPath:(NSString *)path;
 // イベントタップのコールバックから呼ばれる
 - (BOOL)shouldConsumeSpaceKey;
 - (void)togglePreviewFromSpaceKey;
@@ -486,6 +729,8 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     return YES;
 }
 
+// ファイルの先頭 kTQLTextPreviewMaxBytes をそのままテキストとして表示する。
+// TXT や .md、拡張子なしのテキスト等、整形不要のもの向け。
 - (BOOL)buildTextWindowForPath:(NSString *)path filename:(NSString *)filename
 {
     NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
@@ -502,7 +747,50 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         text = [[[NSString alloc] initWithData:data encoding:NSShiftJISStringEncoding] autorelease];
     }
     if (text == nil) {
-        text = @"(テキストとして読み込めませんでした)";
+        text = J("(テキストとして読み込めませんでした)");
+    }
+    return [self buildTextWindowWithString:text filename:filename];
+}
+
+// 旧Word(.doc)、RTF、HTML等を Tiger 標準の textutil で txt に変換して表示する。
+- (BOOL)buildTextutilWindowForPath:(NSString *)path filename:(NSString *)filename
+{
+    NSString *text = TQLRunTool(@"/usr/bin/textutil",
+        [NSArray arrayWithObjects:@"-convert", @"txt", @"-stdout", @"--", path, nil],
+        1024 * 1024);
+    if ([text length] == 0) {
+        // textutil が扱えなかった場合、中身がテキストっぽければ素で見せる。
+        if (TQLLooksLikeText(path)) {
+            return [self buildTextWindowForPath:path filename:filename];
+        }
+        NSLog(@"Tiger QuickLook: textutil で読めませんでした: %@", path);
+        return NO;
+    }
+    if ([text length] > kTQLTextPreviewMaxBytes) {
+        text = [text substringToIndex:(unsigned int)kTQLTextPreviewMaxBytes];
+    }
+    return [self buildTextWindowWithString:text filename:filename];
+}
+
+// docx / pptx / xlsx / odt / ods / odp から本文の文字列だけ抜いて表示する。
+- (BOOL)buildOfficeZipWindowForPath:(NSString *)path filename:(NSString *)filename
+{
+    NSString *text = TQLTextFromOfficeZip(path);
+    if ([text length] == 0) {
+        NSLog(@"Tiger QuickLook: 本文を取り出せませんでした: %@", path);
+        return NO;
+    }
+    if ([text length] > kTQLTextPreviewMaxBytes) {
+        text = [text substringToIndex:(unsigned int)kTQLTextPreviewMaxBytes];
+    }
+    return [self buildTextWindowWithString:text filename:filename];
+}
+
+// 出来上がった文字列を等幅のスクロール可能ビューに載せて _window を組む。
+- (BOOL)buildTextWindowWithString:(NSString *)text filename:(NSString *)filename
+{
+    if (text == nil) {
+        text = @"";
     }
 
     NSFont *textFont = [NSFont userFixedPitchFontOfSize:12.0];
@@ -538,20 +826,17 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 
 - (BOOL)canPreviewPath:(NSString *)path
 {
-    NSString *ext = [[path pathExtension] lowercaseString];
-    return [ext isEqualToString:@"jpg"]  || [ext isEqualToString:@"jpeg"]
-        || [ext isEqualToString:@"png"]  || [ext isEqualToString:@"pdf"]
-        || [ext isEqualToString:@"txt"];
+    return TQLKindForPath(path) != kTQLKindUnsupported;
 }
 
 - (void)showPreviewForPath:(NSString *)path
 {
-    if (![self canPreviewPath:path]) {
-        NSLog(@"Tiger QuickLook: 対応していない形式です(JPG/PNG/PDF/TXTのみ): %@", path);
+    TQLKind kind = TQLKindForPath(path);
+    if (kind == kTQLKindUnsupported) {
+        NSLog(@"Tiger QuickLook: 対応していない形式です: %@", path);
         return;
     }
     NSString *filename = [path lastPathComponent];
-    NSString *ext = [[path pathExtension] lowercaseString];
 
     // 直前のプレビューがあれば、まず画面から外してから作り直す
     // (表示中のウィンドウをreleaseすると解放済みメモリに触れる危険がある)。
@@ -559,12 +844,23 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     _previewVisible = NO;
 
     BOOL ok;
-    if ([ext isEqualToString:@"pdf"]) {
-        ok = [self buildPDFWindowForPath:path filename:filename];
-    } else if ([ext isEqualToString:@"txt"]) {
-        ok = [self buildTextWindowForPath:path filename:filename];
-    } else {
-        ok = [self buildImageWindowForPath:path filename:filename];
+    switch (kind) {
+        case kTQLKindPDF:
+            ok = [self buildPDFWindowForPath:path filename:filename];
+            break;
+        case kTQLKindImage:
+            ok = [self buildImageWindowForPath:path filename:filename];
+            break;
+        case kTQLKindTextutil:
+            ok = [self buildTextutilWindowForPath:path filename:filename];
+            break;
+        case kTQLKindOfficeZip:
+            ok = [self buildOfficeZipWindowForPath:path filename:filename];
+            break;
+        case kTQLKindText:
+        default:
+            ok = [self buildTextWindowForPath:path filename:filename];
+            break;
     }
     if (!ok || _window == nil) {
         return;

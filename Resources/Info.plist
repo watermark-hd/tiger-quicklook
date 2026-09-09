@@ -70,9 +70,64 @@
             <key>CFBundleTypeExtensions</key>
             <array>
                 <string>txt</string>
+                <string>text</string>
+                <string>md</string>
+                <string>markdown</string>
+                <string>csv</string>
+                <string>tsv</string>
+                <string>log</string>
+                <string>json</string>
+                <string>xml</string>
+                <string>yaml</string>
+                <string>yml</string>
+                <string>plist</string>
+                <string>ini</string>
+                <string>conf</string>
+                <string>sh</string>
             </array>
             <key>CFBundleTypeName</key>
             <string>Plain Text</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>tiff</string>
+                <string>tif</string>
+                <string>gif</string>
+                <string>bmp</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>doc</string>
+                <string>rtf</string>
+                <string>html</string>
+                <string>htm</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>Rich Text Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>docx</string>
+                <string>pptx</string>
+                <string>xlsx</string>
+                <string>odt</string>
+                <string>ods</string>
+                <string>odp</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>Office / OpenDocument</string>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
         </dict>
