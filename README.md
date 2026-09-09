@@ -93,6 +93,12 @@ open -a TigerQuickLook.app /path/to/file.pdf
 開発の経緯・ハマった点・工夫した点は [`docs/開発ノート.md`](docs/開発ノート.md)
 にまとめてある(自社Web公開用の下書きも兼ねる)。
 
+配布ページ: https://oldmac.policy-log.jp/ (ダウンロードは GitHub Releases から)
+
+## ライセンス
+
+MIT License — [`LICENSE`](LICENSE) を参照。
+
 
 ## これは何か
 

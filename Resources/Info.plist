@@ -32,7 +32,7 @@
     <key>NSHighResolutionCapable</key>
     <false/>
     <key>NSHumanReadableCopyright</key>
-    <string>Personal project.</string>
+    <string>Copyright (c) 2026 倉持一宣. MIT License.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

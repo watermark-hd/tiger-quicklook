@@ -30,6 +30,11 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP_DIR/Contents/Info.plist"
+# アイコンは「クラシック」形式の .icns (is32/il32/ih32/it32 + マスク、最大128px)。
+# 現行 macOS の iconutl が作る PNG ベースの .icns (ic07/ic08/...) は Tiger の
+# Finder が解釈できず、アイコンが真っ白になる。作り直すときは libicns の
+# png2icns を使う:  png2icns TigerQuickLook.icns 16.png 32.png 48.png 128.png
+#   (元PNGは Resources/icon-src/ にある)
 cp Resources/TigerQuickLook.icns "$APP_DIR/Contents/Resources/TigerQuickLook.icns"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 
