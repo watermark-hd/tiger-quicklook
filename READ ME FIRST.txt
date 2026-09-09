@@ -1,98 +1,53 @@
-========================================
- Tiger QuickLook  —  READ ME FIRST
-========================================
+====================================
+ Tiger QuickLook
+====================================
 
-A tiny Quick Look stand-in for Mac OS X 10.4 "Tiger" (PowerPC).
-Select a file in the Finder, press Space, get a preview window.
-(It brings back the Leopard spacebar-preview gesture.)
-
-Supported: images (JPG/PNG/PDF/TIFF/GIF/BMP), plain text and source
-files, DOC/RTF/HTML, and DOCX/PPTX/XLSX/ODT/ODS/ODP (text only, for
-"which file is this?" - not a faithful rendering). Anything else does
-nothing.
+Preview a file by pressing the Space bar, the way Leopard's
+Quick Look does. For Mac OS X 10.4 Tiger.
 
 
-----------------------------------------
- Setup - 3 steps
-----------------------------------------
-
-[1]  Put TigerQuickLook.app wherever you like (e.g. /Applications).
-
-[2]  *** IMPORTANT *** Turn on "Enable access for assistive devices".
-
-     The Space-key feature intercepts an unmodified Space with a
-     CGEventTap, and Tiger requires system permission for that:
-
-       System Preferences
-         -> Universal Access
-           -> tick "Enable access for assistive devices"
-              (at the bottom of the window)
-
-     Without it, the app shows a notice and quits.
-
-[3]  Launch it:
-
-       open TigerQuickLook.app
-
-     *** Always launch via `open`, a Finder double-click, or Login
-         Items. *** If you run the executable directly
-     (.../Contents/MacOS/TigerQuickLook) it does not register with the
-     GUI session and nothing responds - menu bar, Finder query, preview.
-
-     To keep it running: System Preferences -> Accounts -> Login Items,
-     add TigerQuickLook.app.
-
-     While running, a "QL" item sits at the right of the menu bar.
-     Quit from there, or run `killall TigerQuickLook`.
+USE IT
+------
+1. Unzip this file.
+2. Double-click "TigerQuickLook".
+3. In the Finder, click a file once and press the Space bar.
+   A preview opens. Press Space again to close it.
+   Arrow keys show the next / previous file.
 
 
-----------------------------------------
- Using it
-----------------------------------------
+IF SPACE DOES NOTHING
+---------------------
+Turn on one checkbox:
 
-  - Bring the Finder to the front
-  - Select one file
-  - Press Space              -> preview appears
-  - Press Space again, or
-    Esc in the window         -> closes it
-  - Arrow keys (left/right/up/down) while a preview is open
-                               -> previous / next previewable file in
-                                  the same folder (name order, stops at
-                                  the ends). Good for comparing images.
+   Apple menu > System Preferences > Universal Access >
+   "Enable access for assistive devices"
 
-  When an app other than the Finder is frontmost, Space works normally.
+Then quit Tiger QuickLook (the "QL" menu at the top-right of
+your screen, next to the clock) and open it again.
 
 
-----------------------------------------
- Limitations
-----------------------------------------
-
-  - Pressing Space while inline-renaming a file in the Finder previews
-    instead of typing a space (the edit state is not visible from
-    another process). Esc undoes it.
-
-  - For about 0.3 s right after you switch to the Finder, Space may not
-    respond yet (the front-app check is polled). Selecting a file gives
-    it enough time.
-
-  - After replacing the app with a newer build, run
-    `killall TigerQuickLook` first - a leftover agent keeps the old
-    behaviour.
+KEEP IT RUNNING
+---------------
+System Preferences > Accounts > Login Items, and add
+TigerQuickLook. Now it starts every time you log in.
+The "QL" at the top-right means it is running.
 
 
-----------------------------------------
- One-shot mode (no setup needed)
-----------------------------------------
-
-    open -a TigerQuickLook.app /path/to/file.pdf
-
-  Shows one preview; closing the window quits the app. This mode does
-  not need the assistive-devices checkbox.
+BUILD IT YOURSELF (optional)
+----------------------------
+You do not need this to use the app. The source code is here:
+https://github.com/watermark-hd/tiger-quicklook
 
 
-----------------------------------------
- More
-----------------------------------------
+------------------------------------
+Works with images, text and code files, and Word / Excel /
+PowerPoint / OpenOffice documents (text only - just enough to
+see what the file is). Other files do nothing.
 
-  https://github.com/watermark-hd/tiger-quicklook
-  MIT License (see LICENSE.txt)
+If Space types a space while you are renaming a file in the
+Finder, press Esc.
+
+After you update, quit the old copy first, then open the new
+one.
+
+MIT License. See LICENSE.txt.
