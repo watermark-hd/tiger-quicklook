@@ -3,4 +3,7 @@
 *.o
 .DS_Store
 /dist/
+/配布用/*.zip
+/配布用/*.dmg
+/配布用/*.app
 *.iconset

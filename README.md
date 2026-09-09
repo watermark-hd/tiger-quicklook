@@ -82,8 +82,10 @@ open -a TigerQuickLook.app /path/to/file.pdf
 
 ## 配布物
 
-`dist/`(gitignore対象)に、実機でビルドした `TigerQuickLook.app` と
-`必ずお読みください.txt` をまとめた zip / dmg を置いている。
+`配布用/` に、実機でビルドした `TigerQuickLook.app` と `必ずお読みください.txt`
+・`LICENSE.txt` をまとめた `TigerQuickLook-0.1.zip` / `.dmg` を置いている
+(zip/dmg/app は gitignore 対象。MacRumors 投稿文の下書き `macrumors_thread_draft.md`
+も同じフォルダ)。GitHub Releases (`v0.1`) にも同じ zip/dmg を添付済み。
 中身の PowerPC バイナリは iBook 実機ビルドなので、配布物を作り直すときは
 `build.sh` を実機で回して `TigerQuickLook.app` を取得し直すこと。
 
