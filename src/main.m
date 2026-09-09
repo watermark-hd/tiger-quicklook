@@ -70,7 +70,11 @@ static const unsigned long long kTQLTextPreviewMaxBytes = 64 * 1024;
 // 仮想キーコード(ANSI配列基準。配列によらずSpace/Escapeは固定)。
 enum {
     kTQLKeyCodeSpace  = 49,
-    kTQLKeyCodeEscape = 53
+    kTQLKeyCodeEscape = 53,
+    kTQLKeyCodeLeft   = 123,
+    kTQLKeyCodeRight  = 124,
+    kTQLKeyCodeDown   = 125,
+    kTQLKeyCodeUp     = 126
 };
 
 // GCC 4.0 は @"..." リテラル内の非ASCII文字を実行時エンコーディングで解釈して
@@ -205,6 +209,7 @@ static BOOL gTQLForceAgentMode = NO;
 // 実体はTQLAppDelegateが持つ。
 @interface NSObject (TQLAgentHook)
 - (void)dismissPreview;
+- (void)stepPreviewBy:(int)delta;
 @end
 
 /*
@@ -228,10 +233,20 @@ static BOOL gTQLForceAgentMode = NO;
 {
     if ([event type] == NSKeyDown) {
         unsigned short kc = [event keyCode];
+        id appDelegate = [NSApp delegate];
+
         if (kc == kTQLKeyCodeSpace || kc == kTQLKeyCodeEscape) {
-            id appDelegate = [NSApp delegate];
             if ([appDelegate respondsToSelector:@selector(dismissPreview)]) {
                 [appDelegate dismissPreview];
+                return;
+            }
+        }
+        // 表示中に矢印キー → 同じフォルダの前後のファイルへ(Leopard風)。
+        if (kc == kTQLKeyCodeLeft || kc == kTQLKeyCodeUp
+            || kc == kTQLKeyCodeRight || kc == kTQLKeyCodeDown) {
+            if ([appDelegate respondsToSelector:@selector(stepPreviewBy:)]) {
+                int delta = (kc == kTQLKeyCodeRight || kc == kTQLKeyCodeDown) ? 1 : -1;
+                [appDelegate stepPreviewBy:delta];
                 return;
             }
         }
@@ -367,19 +382,29 @@ static BOOL TQLLooksLikeText(NSString *path)
     return (bad * 100 < n * 3); // 制御文字が3%未満ならテキストとみなす
 }
 
-// パスからプレビュー種別を決める。
-static TQLKind TQLKindForPath(NSString *path)
+// 拡張子だけで種別を決める(ファイルの中身は読まない)。
+static TQLKind TQLKindForExtension(NSString *ext)
 {
-    NSString *ext = [[path pathExtension] lowercaseString];
-
     if ([ext isEqualToString:@"pdf"])         return kTQLKindPDF;
     if (TQLExtIn(ext, TQL_IMAGE_EXTS))        return kTQLKindImage;
     if (TQLExtIn(ext, TQL_TEXTUTIL_EXTS))     return kTQLKindTextutil;
     if (TQLExtIn(ext, TQL_OFFICEZIP_EXTS))    return kTQLKindOfficeZip;
     if (TQLExtIn(ext, TQL_TEXT_EXTS))         return kTQLKindText;
+    return kTQLKindUnsupported;
+}
 
+// パスからプレビュー種別を決める。拡張子で分からなければ中身を覗く。
+static TQLKind TQLKindForPath(NSString *path)
+{
+    NSString *ext = [[path pathExtension] lowercaseString];
+    TQLKind k = TQLKindForExtension(ext);
+    if (k != kTQLKindUnsupported) {
+        return k;
+    }
     // 拡張子が無い / 未知 → 中身がテキストっぽければ出す。
-    if (TQLLooksLikeText(path))               return kTQLKindText;
+    if (TQLLooksLikeText(path)) {
+        return kTQLKindText;
+    }
     return kTQLKindUnsupported;
 }
 
@@ -528,6 +553,12 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
     BOOL           _agentMode;        // YES: 常駐エージェント / NO: 使い捨て単発
     BOOL           _previewVisible;
 
+    // 矢印キーでの前後移動用
+    NSArray       *_navFiles;         // いま移動対象にしているファイル(フルパス)一覧
+    NSString      *_navDir;           // _navFiles を作ったディレクトリ
+    NSPoint        _preferredTopLeft; // 移動時に維持したいウィンドウ左上
+    BOOL           _hasPreferredTopLeft;
+
     // エージェントモード専用
     NSAppleScript     *_selectionScript;
     CFMachPortRef       _eventTap;
@@ -538,6 +569,7 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
 - (void)setLaunchFilePath:(NSString *)path;
 - (void)showPreviewForPath:(NSString *)path;
 - (void)dismissPreview;
+- (void)stepPreviewBy:(int)delta;
 // プレビューウィンドウの組み立て(表示は showPreviewForPath: がまとめて行う)
 - (BOOL)buildImageWindowForPath:(NSString *)path filename:(NSString *)filename;
 - (BOOL)buildPDFWindowForPath:(NSString *)path filename:(NSString *)filename;
@@ -623,6 +655,8 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     }
     [_statusItem release];
     [_selectionScript release];
+    [_navFiles release];
+    [_navDir release];
     [_currentPath release];
     [_launchFilePath release];
     [_window release];
@@ -651,7 +685,12 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
                                                               defer:NO];
     [window setTitle:title];
     [window setMinSize:NSMakeSize(200.0, 150.0)];
-    [window center];
+    if (_hasPreferredTopLeft) {
+        // 矢印キーで隣のファイルに移った直後。左上を動かさず差し替える。
+        [window setFrameTopLeftPoint:_preferredTopLeft];
+    } else {
+        [window center];
+    }
     [window setReleasedWhenClosed:NO];
     return window;
 }
@@ -881,6 +920,9 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         return;
     }
     _previewVisible = NO;
+    _hasPreferredTopLeft = NO;
+    [_navFiles release]; _navFiles = nil;
+    [_navDir release];   _navDir = nil;
     if (_agentMode) {
         [_window orderOut:nil];
         // フォーカスをFinderに返す(すでに起動済みのFinderをactivateするだけ)。
@@ -889,6 +931,78 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         // 使い捨て単発モード: 閉じたら applicationShouldTerminate... で終了。
         [_window close];
     }
+}
+
+// プレビュー表示中の矢印キー。同じフォルダの「プレビューできるファイル」を
+// 名前順に並べて delta(±1) だけ進む。端では止まる(Leopardと同じ)。
+// 判定は拡張子だけ(中身は読まない)なので、押しっぱなしでも軽い。
+- (void)stepPreviewBy:(int)delta
+{
+    if (!_previewVisible || _currentPath == nil) {
+        return;
+    }
+    NSString *dir = [_currentPath stringByDeletingLastPathComponent];
+
+    // 同じディレクトリなら前回作った一覧を使い回す。
+    if (_navFiles == nil || _navDir == nil || ![_navDir isEqualToString:dir]) {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSArray *names = [fm directoryContentsAtPath:dir];
+        NSMutableArray *keep = [NSMutableArray array];
+        NSEnumerator *e = [names objectEnumerator];
+        NSString *name;
+        while ((name = [e nextObject]) != nil) {
+            if ([name hasPrefix:@"."]) {
+                continue;
+            }
+            NSString *ext = [[name pathExtension] lowercaseString];
+            if (TQLKindForExtension(ext) == kTQLKindUnsupported) {
+                continue;
+            }
+            [keep addObject:[dir stringByAppendingPathComponent:name]];
+        }
+        [keep sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+        [_navFiles release];
+        _navFiles = [keep copy];
+        [_navDir release];
+        _navDir = [dir copy];
+    }
+
+    unsigned count = [_navFiles count];
+    if (count < 2) {
+        return;
+    }
+    unsigned cur = [_navFiles indexOfObject:_currentPath];
+    if (cur == (unsigned)NSNotFound) {
+        // フルパスが一致しない場合(Finder由来のパス表記ゆれ等)はファイル名で照合。
+        NSString *base = [_currentPath lastPathComponent];
+        unsigned i;
+        for (i = 0; i < count; i++) {
+            if ([[[_navFiles objectAtIndex:i] lastPathComponent] isEqualToString:base]) {
+                cur = i;
+                break;
+            }
+        }
+        if (cur == (unsigned)NSNotFound) {
+            return;
+        }
+    }
+    int next = (int)cur + delta;
+    if (next < 0 || next >= (int)count) {
+        return; // 端で止まる
+    }
+    NSString *nextPath = [_navFiles objectAtIndex:(unsigned)next];
+    if ([nextPath isEqualToString:_currentPath]) {
+        return;
+    }
+
+    // ウィンドウの左上を維持したまま中身だけ差し替える。
+    if (_window != nil) {
+        NSRect f = [_window frame];
+        _preferredTopLeft = NSMakePoint(NSMinX(f), NSMaxY(f));
+        _hasPreferredTopLeft = YES;
+    }
+    [self showPreviewForPath:nextPath];
+    _hasPreferredTopLeft = NO;
 }
 
 
