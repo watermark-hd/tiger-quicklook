@@ -33,5 +33,14 @@ cp Resources/Info.plist "$APP_DIR/Contents/Info.plist"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 
 echo "==> Done: $APP_DIR"
-echo "    動作確認: open $APP_DIR --args /path/to/test.jpg"
-echo "    または:   $APP_DIR/Contents/MacOS/$APP_NAME /path/to/test.jpg"
+echo
+echo "    単発プレビュー:"
+echo "      open -a $APP_DIR /path/to/test.jpg"
+echo
+echo "    常駐エージェント(Finderで選択して Space):"
+echo "      open $APP_DIR"
+echo "      ※ 必ず open / ダブルクリック / ログイン項目から起動する。"
+echo "         実行ファイルを直接叩くと GUI セッションに登録されず無反応。"
+echo "      ※ 事前に システム環境設定 →「ユニバーサルアクセス」→"
+echo "         「補助装置にアクセスできるようにする」にチェックが必要"
+echo "      ※ 終了は メニューバー「QL」 または killall $APP_NAME"

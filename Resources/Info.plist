@@ -22,6 +22,11 @@
     <string>ja</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.4</string>
+    <!-- エージェントモードでDockアイコン・メニューバーを持たない常駐プロセスに
+         なるための指定。単発プレビュー時も余計なDockアイコンを出さずに済む。
+         終了はメニューバー右側の「QL」ステータス項目から。 -->
+    <key>LSUIElement</key>
+    <true/>
     <key>NSHighResolutionCapable</key>
     <false/>
     <key>NSHumanReadableCopyright</key>
