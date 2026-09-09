@@ -6,4 +6,6 @@
 /配布用/*.zip
 /配布用/*.dmg
 /配布用/*.app
+/testfiles/
+/.build-stage/
 *.iconset

@@ -14,6 +14,9 @@ Quick Lookの再現)。もう一度 Space で閉じる。**この機能を使う
 プレビュー中の矢印キーで隣のファイルへ移動。** 詳細は「対応形式」と
 「使い方 4.」を参照。
 
+**v0.3: 矢印キー移動でウィンドウを作り直さず中身だけ差し替えるようにした
+(ちらつき低減、位置を保持)。**
+
 ## 使い方（必ずお読みください）
 
 配布物(zip / dmg)にもこの内容を `必ずお読みください.txt` として同梱する。
@@ -89,9 +92,9 @@ open -a TigerQuickLook.app /path/to/file.pdf
 ## 配布物
 
 `配布用/` に、実機でビルドした `TigerQuickLook.app` と `必ずお読みください.txt`
-・`LICENSE.txt` をまとめた `TigerQuickLook-0.2.zip` / `.dmg` を置いている
+・`LICENSE.txt` をまとめた `TigerQuickLook-0.3.zip` / `.dmg` を置いている
 (zip/dmg/app は gitignore 対象。MacRumors 投稿文の下書き `macrumors_thread_draft.md`
-も同じフォルダ)。GitHub Releases (`v0.2`) にも同じ zip/dmg を添付済み。
+も同じフォルダ)。GitHub Releases (`v0.3`) にも同じ zip/dmg を添付済み。
 中身の PowerPC バイナリは iBook 実機ビルドなので、配布物を作り直すときは
 `build.sh` を実機で回して `TigerQuickLook.app` を取得し直すこと。
 
