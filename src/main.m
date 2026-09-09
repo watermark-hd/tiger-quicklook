@@ -77,9 +77,11 @@ enum {
     kTQLKeyCodeUp     = 126
 };
 
-// v0.4以降、アプリ内の表示文字列はすべて英語(ASCII)にした。GCC 4.0 は
-// @"..." リテラル内の非ASCIIを実行時エンコーディングで解釈して文字化け
-// させるため、日本語をUIに出さない方針(日本語の説明は同梱readme/READMEで)。
+// アプリが画面に出す文字列(ダイアログ・メニュー等)は英語＋日本語の併記。
+// GCC 4.0 は @"..." リテラル内の非ASCIIを実行時エンコーディングで解釈して
+// 文字化けさせるため、非ASCIIを含む文字列は必ずこの J() を通し、UTF-8として
+// 明示的にデコードしてNSStringを作る。
+static NSString *J(const char *utf8) { return [NSString stringWithUTF8String:utf8]; }
 
 // --agent が明示指定されたか。コマンドラインから実行ファイルを直接叩くと
 // AppKitが --agent を「開くファイル」として application:openFile: に
@@ -794,7 +796,8 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         text = [[[NSString alloc] initWithData:data encoding:NSShiftJISStringEncoding] autorelease];
     }
     if (text == nil) {
-        text = @"(could not read this file as text)";
+        text = J("(could not read this file as text  /  "
+                 "テキストとして読み込めませんでした)");
     }
     return [self buildTextWindowWithString:text filename:filename];
 }
@@ -1110,7 +1113,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 - (void)bailWithMessage:(NSString *)message
 {
     [NSApp activateIgnoringOtherApps:YES];
-    NSRunAlertPanel(@"Tiger QuickLook", message, @"Quit", nil, nil);
+    NSRunAlertPanel(@"Tiger QuickLook", message, J("Quit  /  終了"), nil, nil);
     [NSApp terminate:nil];
 }
 
@@ -1119,16 +1122,19 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     _statusItem = [[[NSStatusBar systemStatusBar]
         statusItemWithLength:NSVariableStatusItemLength] retain];
     [_statusItem setTitle:@"QL"];
-    [_statusItem setToolTip:@"Tiger QuickLook - select a file in the Finder and press Space"];
+    [_statusItem setToolTip:
+        J("Tiger QuickLook  -  pick a file in the Finder and press Space"
+          "  /  Finder でファイルを選んで Space")];
     [_statusItem setHighlightMode:YES];
 
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Tiger QuickLook"] autorelease];
-    NSMenuItem *hint = [menu addItemWithTitle:@"Select a file in the Finder, then press Space"
+    NSMenuItem *hint = [menu addItemWithTitle:
+        J("Pick a file in the Finder, then press Space  /  Finder で選んで Space")
                                        action:NULL
                                 keyEquivalent:@""];
     [hint setEnabled:NO];
     [menu addItem:[NSMenuItem separatorItem]];
-    [menu addItemWithTitle:@"Quit Tiger QuickLook"
+    [menu addItemWithTitle:J("Quit Tiger QuickLook  /  終了")
                     action:@selector(terminate:)
              keyEquivalent:@""];
     [_statusItem setMenu:menu];
@@ -1139,12 +1145,16 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     _agentMode = YES;
 
     if (!AXAPIEnabled()) {
-        [self bailWithMessage:
-            @"To preview files with the Space bar, turn on one checkbox:\n\n"
-             "  System Preferences  >  Universal Access  >\n"
-             "  \"Enable access for assistive devices\"\n\n"
-             "Then open Tiger QuickLook again.\n\n"
-             "(Japanese instructions are in the README on GitHub.)"];
+        [self bailWithMessage:J(
+            "To preview files with the Space bar, turn on one checkbox:\n\n"
+            "    System Preferences  >  Universal Access  >\n"
+            "    \"Enable access for assistive devices\"\n\n"
+            "Then open Tiger QuickLook again.\n\n"
+            "--------------------\n\n"
+            "Space キーでのプレビューには、チェックを 1 つ入れてください:\n\n"
+            "    システム環境設定  >  ユニバーサルアクセス  >\n"
+            "    「補助装置にアクセスできるようにする」\n\n"
+            "そのあと、もう一度 Tiger QuickLook を開いてください。")];
         return;
     }
 
@@ -1169,10 +1179,14 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
                                  CGEventMaskBit(kCGEventKeyDown),
                                  TQLTapCallback, self);
     if (_eventTap == NULL) {
-        [self bailWithMessage:
-            @"Could not start watching the keyboard.\n\n"
-             "Check that System Preferences > Universal Access >\n"
-             "\"Enable access for assistive devices\" is turned on."];
+        [self bailWithMessage:J(
+            "Could not start watching the keyboard.\n"
+            "Check that \"Enable access for assistive devices\"\n"
+            "(System Preferences > Universal Access) is on.\n\n"
+            "--------------------\n\n"
+            "キーボードの監視を開始できませんでした。\n"
+            "システム環境設定 > ユニバーサルアクセス の\n"
+            "「補助装置にアクセスできるようにする」を確認してください。")];
         return;
     }
     _tapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, _eventTap, 0);

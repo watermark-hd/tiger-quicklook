@@ -25,10 +25,10 @@ again?"**, not faithful rendering.
 ## Install & use
 
 1. Download `TigerQuickLook-x.y.zip` from the [Releases](../../releases) page and
-   unzip it. Put `TigerQuickLook.app` wherever you like.
+   unzip it. Move `TigerQuickLook.app` into your Applications folder.
 2. Tick "Enable access for assistive devices" (see above).
-3. Launch it with **`open TigerQuickLook.app`**, a double-click, or by adding it
-   to your Login Items.
+3. Launch it by double-clicking it, with `open TigerQuickLook.app`, or by adding
+   it to your Login Items.
 
    **Always launch via `open` / double-click / Login Items.** Running the
    executable directly (`.../Contents/MacOS/TigerQuickLook`) skips LaunchServices,

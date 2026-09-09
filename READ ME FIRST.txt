@@ -9,8 +9,9 @@ Quick Look does. For Mac OS X 10.4 Tiger.
 USE IT
 ------
 1. Unzip this file.
-2. Double-click "TigerQuickLook".
-3. In the Finder, click a file once and press the Space bar.
+2. Move "TigerQuickLook" into your Applications folder.
+3. Double-click it.
+4. In the Finder, click a file once and press the Space bar.
    A preview opens. Press Space again to close it.
    Arrow keys show the next / previous file.
 
