@@ -556,8 +556,6 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
     // 矢印キーでの前後移動用
     NSArray       *_navFiles;         // いま移動対象にしているファイル(フルパス)一覧
     NSString      *_navDir;           // _navFiles を作ったディレクトリ
-    NSPoint        _preferredTopLeft; // 移動時に維持したいウィンドウ左上
-    BOOL           _hasPreferredTopLeft;
 
     // エージェントモード専用
     NSAppleScript     *_selectionScript;
@@ -568,6 +566,8 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
 }
 - (void)setLaunchFilePath:(NSString *)path;
 - (void)showPreviewForPath:(NSString *)path;
+- (void)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep;
+- (void)installContentView:(NSView *)view size:(NSSize)size title:(NSString *)title;
 - (void)dismissPreview;
 - (void)stepPreviewBy:(int)delta;
 // プレビューウィンドウの組み立て(表示は showPreviewForPath: がまとめて行う)
@@ -685,14 +685,27 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
                                                               defer:NO];
     [window setTitle:title];
     [window setMinSize:NSMakeSize(200.0, 150.0)];
-    if (_hasPreferredTopLeft) {
-        // 矢印キーで隣のファイルに移った直後。左上を動かさず差し替える。
-        [window setFrameTopLeftPoint:_preferredTopLeft];
-    } else {
-        [window center];
-    }
+    [window center];
     [window setReleasedWhenClosed:NO];
     return window;
+}
+
+// build*Window... から呼ぶ共通処理。ウィンドウが無ければ作る。あれば
+// 使い回して contentView・サイズ・タイトルだけ差し替える(左上は固定)。
+// 毎回ウィンドウを作り直さないぶん、矢印キー移動のちらつき・重さが減る。
+- (void)installContentView:(NSView *)view size:(NSSize)size title:(NSString *)title
+{
+    if (_window == nil) {
+        _window = [self makeWindowWithTitle:title contentSize:size];
+        [_window setContentView:view];
+        return;
+    }
+    NSRect f = [_window frame];
+    NSPoint topLeft = NSMakePoint(NSMinX(f), NSMaxY(f));
+    [_window setContentView:view];      // 古い contentView はここで解放される
+    [_window setContentSize:size];      // フレームを新しい内容サイズへ
+    [_window setFrameTopLeftPoint:topLeft];
+    [_window setTitle:title];
 }
 
 - (NSSize)fittedSizeForImageSize:(NSSize)imageSize
@@ -727,14 +740,11 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     NSSize imageSize = NSMakeSize((float)CGImageGetWidth(image), (float)CGImageGetHeight(image));
     NSSize windowSize = [self fittedSizeForImageSize:imageSize];
 
-    [_window release];
-    _window = [self makeWindowWithTitle:filename contentSize:windowSize];
-
     TQLPreviewView *view = [[TQLPreviewView alloc] initWithFrame:NSMakeRect(0, 0, windowSize.width, windowSize.height)];
     [view setCGImage:image];
     CGImageRelease(image);
 
-    [_window setContentView:view];
+    [self installContentView:view size:windowSize title:filename];
     [view release];
     return YES;
 }
@@ -756,14 +766,11 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     CGRect box = CGPDFPageGetBoxRect(page, kCGPDFMediaBox);
     NSSize windowSize = [self fittedSizeForImageSize:NSMakeSize(box.size.width, box.size.height)];
 
-    [_window release];
-    _window = [self makeWindowWithTitle:filename contentSize:windowSize];
-
     TQLPreviewView *view = [[TQLPreviewView alloc] initWithFrame:NSMakeRect(0, 0, windowSize.width, windowSize.height)];
     [view setPDFDocument:document];
     CGPDFDocumentRelease(document); // viewがretainしている
 
-    [_window setContentView:view];
+    [self installContentView:view size:windowSize title:filename];
     [view release];
     return YES;
 }
@@ -842,9 +849,6 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     float windowHeight = MAX(120.0, MIN(kTQLMaxContentHeight, rawTextSize.height + 40.0 + kTQLTextExtraHeight));
     NSSize windowSize = NSMakeSize(windowWidth, windowHeight);
 
-    [_window release];
-    _window = [self makeWindowWithTitle:filename contentSize:windowSize];
-
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, windowSize.width, windowSize.height)];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
@@ -858,7 +862,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     [scrollView setDocumentView:textView];
     [textView release];
 
-    [_window setContentView:scrollView];
+    [self installContentView:scrollView size:windowSize title:filename];
     [scrollView release];
     return YES;
 }
@@ -870,16 +874,18 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 
 - (void)showPreviewForPath:(NSString *)path
 {
+    // 新規プレビュー(Space / Finderの「開く」/ 起動引数)。位置は毎回センタリング。
+    [self showPreviewForPath:path keepingPlacement:NO];
+}
+
+- (void)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep
+{
     TQLKind kind = TQLKindForPath(path);
     if (kind == kTQLKindUnsupported) {
         NSLog(@"Tiger QuickLook: 対応していない形式です: %@", path);
         return;
     }
     NSString *filename = [path lastPathComponent];
-
-    // 直前のプレビューがあれば、まず画面から外してから作り直す
-    // (表示中のウィンドウをreleaseすると解放済みメモリに触れる危険がある)。
-    [_window orderOut:nil];
     _previewVisible = NO;
 
     BOOL ok;
@@ -905,6 +911,12 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         return;
     }
 
+    // 新規プレビューは中央へ。矢印キー移動(keep=YES)のときは
+    // installContentView: が左上を維持しているのでそのまま。
+    if (!keep) {
+        [_window center];
+    }
+
     [_currentPath autorelease];
     _currentPath = [path copy];
 
@@ -920,7 +932,6 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         return;
     }
     _previewVisible = NO;
-    _hasPreferredTopLeft = NO;
     [_navFiles release]; _navFiles = nil;
     [_navDir release];   _navDir = nil;
     if (_agentMode) {
@@ -995,14 +1006,8 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         return;
     }
 
-    // ウィンドウの左上を維持したまま中身だけ差し替える。
-    if (_window != nil) {
-        NSRect f = [_window frame];
-        _preferredTopLeft = NSMakePoint(NSMinX(f), NSMaxY(f));
-        _hasPreferredTopLeft = YES;
-    }
-    [self showPreviewForPath:nextPath];
-    _hasPreferredTopLeft = NO;
+    // ウィンドウは使い回し、中身とサイズだけ差し替える(左上は維持)。
+    [self showPreviewForPath:nextPath keepingPlacement:YES];
 }
 
 
