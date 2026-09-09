@@ -9,3 +9,4 @@
 /testfiles/
 /.build-stage/
 *.iconset
+/配布用/*.txt
