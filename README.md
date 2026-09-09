@@ -4,14 +4,15 @@
 テキストが読める程度の大きさのプレビューが欲しい」という話から、Tiger実機向けの
 軽量なQuick Look代替を作る方向で合意した。
 
-**2026-09-07時点: JPG/PNG/PDF/TXTの4形式とも実機で動作確認済み。** ウィンドウは
-ドラッグでリサイズ可能。詳細は下の「進捗」を参照。
-
 **2026-09-09: 常駐エージェント方式を追加。** Finderを最前面にしてファイルを選び、
 修飾なしの **Space キー** を押すとプレビューが出る(Leopardのスペースバー式
 Quick Lookの再現)。もう一度 Space で閉じる。**この機能を使うには
 「補助装置にアクセスできるようにする」を有効にする必要がある** →
 下の「使い方（必ずお読みください）」を参照。
+
+**v0.2: 対応形式を拡張(TIFF/MD/DOC/DOCX/XLSX/… と拡張子なしテキスト)、
+プレビュー中の矢印キーで隣のファイルへ移動。** 詳細は「対応形式」と
+「使い方 4.」を参照。
 
 ## 使い方（必ずお読みください）
 
@@ -88,9 +89,9 @@ open -a TigerQuickLook.app /path/to/file.pdf
 ## 配布物
 
 `配布用/` に、実機でビルドした `TigerQuickLook.app` と `必ずお読みください.txt`
-・`LICENSE.txt` をまとめた `TigerQuickLook-0.1.zip` / `.dmg` を置いている
+・`LICENSE.txt` をまとめた `TigerQuickLook-0.2.zip` / `.dmg` を置いている
 (zip/dmg/app は gitignore 対象。MacRumors 投稿文の下書き `macrumors_thread_draft.md`
-も同じフォルダ)。GitHub Releases (`v0.1`) にも同じ zip/dmg を添付済み。
+も同じフォルダ)。GitHub Releases (`v0.2`) にも同じ zip/dmg を添付済み。
 中身の PowerPC バイナリは iBook 実機ビルドなので、配布物を作り直すときは
 `build.sh` を実機で回して `TigerQuickLook.app` を取得し直すこと。
 
