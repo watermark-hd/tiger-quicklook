@@ -77,10 +77,9 @@ enum {
     kTQLKeyCodeUp     = 126
 };
 
-// GCC 4.0 は @"..." リテラル内の非ASCII文字を実行時エンコーディングで解釈して
-// しまい、メニューやダイアログが文字化けする。ソースはUTF-8なので、UTF-8として
-// 明示的にデコードしてNSStringを作る。ユーザーに見える日本語はこれを通す。
-static NSString *J(const char *utf8) { return [NSString stringWithUTF8String:utf8]; }
+// v0.4以降、アプリ内の表示文字列はすべて英語(ASCII)にした。GCC 4.0 は
+// @"..." リテラル内の非ASCIIを実行時エンコーディングで解釈して文字化け
+// させるため、日本語をUIに出さない方針(日本語の説明は同梱readme/READMEで)。
 
 // --agent が明示指定されたか。コマンドラインから実行ファイルを直接叩くと
 // AppKitが --agent を「開くファイル」として application:openFile: に
@@ -556,6 +555,7 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
     // 矢印キーでの前後移動用
     NSArray       *_navFiles;         // いま移動対象にしているファイル(フルパス)一覧
     NSString      *_navDir;           // _navFiles を作ったディレクトリ
+    BOOL           _stepping;         // stepPreviewBy: 実行中(再入防止)
 
     // エージェントモード専用
     NSAppleScript     *_selectionScript;
@@ -566,10 +566,11 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
 }
 - (void)setLaunchFilePath:(NSString *)path;
 - (void)showPreviewForPath:(NSString *)path;
-- (void)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep;
+- (BOOL)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep;
 - (void)installContentView:(NSView *)view size:(NSSize)size title:(NSString *)title;
 - (void)dismissPreview;
 - (void)stepPreviewBy:(int)delta;
+- (void)doStepPreviewBy:(int)delta;
 // プレビューウィンドウの組み立て(表示は showPreviewForPath: がまとめて行う)
 - (BOOL)buildImageWindowForPath:(NSString *)path filename:(NSString *)filename;
 - (BOOL)buildPDFWindowForPath:(NSString *)path filename:(NSString *)filename;
@@ -793,7 +794,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
         text = [[[NSString alloc] initWithData:data encoding:NSShiftJISStringEncoding] autorelease];
     }
     if (text == nil) {
-        text = J("(テキストとして読み込めませんでした)");
+        text = @"(could not read this file as text)";
     }
     return [self buildTextWindowWithString:text filename:filename];
 }
@@ -878,15 +879,16 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     [self showPreviewForPath:path keepingPlacement:NO];
 }
 
-- (void)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep
+// 戻り値: 実際にプレビューを表示できたら YES。矢印キー移動が
+// 「表示できなければ次のファイルへ飛ばす」判定に使う。
+- (BOOL)showPreviewForPath:(NSString *)path keepingPlacement:(BOOL)keep
 {
     TQLKind kind = TQLKindForPath(path);
     if (kind == kTQLKindUnsupported) {
         NSLog(@"Tiger QuickLook: 対応していない形式です: %@", path);
-        return;
+        return NO;
     }
     NSString *filename = [path lastPathComponent];
-    _previewVisible = NO;
 
     BOOL ok;
     switch (kind) {
@@ -908,7 +910,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
             break;
     }
     if (!ok || _window == nil) {
-        return;
+        return NO;
     }
 
     // 新規プレビューは中央へ。矢印キー移動(keep=YES)のときは
@@ -924,6 +926,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     [NSApp activateIgnoringOtherApps:YES];
     [_window makeKeyAndOrderFront:nil];
     _previewVisible = YES;
+    return YES;
 }
 
 - (void)dismissPreview
@@ -949,9 +952,18 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 // 判定は拡張子だけ(中身は読まない)なので、押しっぱなしでも軽い。
 - (void)stepPreviewBy:(int)delta
 {
-    if (!_previewVisible || _currentPath == nil) {
+    // 再入防止。officeファイルの展開で waitUntilExit が runloop を回し、
+    // キー押しっぱなしだと stepPreviewBy: が入れ子で呼ばれることがある。
+    if (_stepping || !_previewVisible || _currentPath == nil) {
         return;
     }
+    _stepping = YES;
+    [self doStepPreviewBy:delta];
+    _stepping = NO;
+}
+
+- (void)doStepPreviewBy:(int)delta
+{
     NSString *dir = [_currentPath stringByDeletingLastPathComponent];
 
     // 同じディレクトリなら前回作った一覧を使い回す。
@@ -997,17 +1009,26 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
             return;
         }
     }
-    int next = (int)cur + delta;
-    if (next < 0 || next >= (int)count) {
-        return; // 端で止まる
+    // delta 方向へ進みながら、実際にプレビューできるファイルを探す。
+    // xlsx等が壊れている/取り出せない場合はそこで止まらず飛ばす
+    // (止まると前のプレビューが出たままで、そのファイルと誤解しやすい)。
+    int n = (int)count;
+    int i = (int)cur + delta;
+    int guard = 0;
+    BOOL moved = NO;
+    while (i >= 0 && i < n && guard < 40) {
+        NSString *cand = [_navFiles objectAtIndex:(unsigned)i];
+        if (![cand isEqualToString:_currentPath]
+            && [self showPreviewForPath:cand keepingPlacement:YES]) {
+            moved = YES;
+            break;
+        }
+        i += delta;
+        guard++;
     }
-    NSString *nextPath = [_navFiles objectAtIndex:(unsigned)next];
-    if ([nextPath isEqualToString:_currentPath]) {
-        return;
+    if (!moved) {
+        NSBeep(); // この方向にプレビューできるファイルが無い(端 or 全滅)
     }
-
-    // ウィンドウは使い回し、中身とサイズだけ差し替える(左上は維持)。
-    [self showPreviewForPath:nextPath keepingPlacement:YES];
 }
 
 
@@ -1089,7 +1110,7 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 - (void)bailWithMessage:(NSString *)message
 {
     [NSApp activateIgnoringOtherApps:YES];
-    NSRunAlertPanel(@"Tiger QuickLook", message, J("終了"), nil, nil);
+    NSRunAlertPanel(@"Tiger QuickLook", message, @"Quit", nil, nil);
     [NSApp terminate:nil];
 }
 
@@ -1098,16 +1119,16 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     _statusItem = [[[NSStatusBar systemStatusBar]
         statusItemWithLength:NSVariableStatusItemLength] retain];
     [_statusItem setTitle:@"QL"];
-    [_statusItem setToolTip:J("Tiger QuickLook — Finder でファイルを選んで Space")];
+    [_statusItem setToolTip:@"Tiger QuickLook - select a file in the Finder and press Space"];
     [_statusItem setHighlightMode:YES];
 
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Tiger QuickLook"] autorelease];
-    NSMenuItem *hint = [menu addItemWithTitle:J("Finder で選択して Space キーでプレビュー")
+    NSMenuItem *hint = [menu addItemWithTitle:@"Select a file in the Finder, then press Space"
                                        action:NULL
                                 keyEquivalent:@""];
     [hint setEnabled:NO];
     [menu addItem:[NSMenuItem separatorItem]];
-    [menu addItemWithTitle:J("Tiger QuickLook を終了")
+    [menu addItemWithTitle:@"Quit Tiger QuickLook"
                     action:@selector(terminate:)
              keyEquivalent:@""];
     [_statusItem setMenu:menu];
@@ -1118,10 +1139,12 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     _agentMode = YES;
 
     if (!AXAPIEnabled()) {
-        [self bailWithMessage:J(
-            "Space キーでのプレビューには、システム環境設定 →「ユニバーサルアクセス」で"
-            "「補助装置にアクセスできるようにする」にチェックを入れる必要があります。\n\n"
-            "チェックを入れてから、もう一度 Tiger QuickLook を起動してください。")];
+        [self bailWithMessage:
+            @"To preview files with the Space bar, turn on one checkbox:\n\n"
+             "  System Preferences  >  Universal Access  >\n"
+             "  \"Enable access for assistive devices\"\n\n"
+             "Then open Tiger QuickLook again.\n\n"
+             "(Japanese instructions are in the README on GitHub.)"];
         return;
     }
 
@@ -1146,9 +1169,10 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
                                  CGEventMaskBit(kCGEventKeyDown),
                                  TQLTapCallback, self);
     if (_eventTap == NULL) {
-        [self bailWithMessage:J(
-            "キーボードの監視を開始できませんでした。\n"
-            "「補助装置にアクセスできるようにする」が有効か確認してください。")];
+        [self bailWithMessage:
+            @"Could not start watching the keyboard.\n\n"
+             "Check that System Preferences > Universal Access >\n"
+             "\"Enable access for assistive devices\" is turned on."];
         return;
     }
     _tapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, _eventTap, 0);
