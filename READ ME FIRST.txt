@@ -1,0 +1,98 @@
+========================================
+ Tiger QuickLook  —  READ ME FIRST
+========================================
+
+A tiny Quick Look stand-in for Mac OS X 10.4 "Tiger" (PowerPC).
+Select a file in the Finder, press Space, get a preview window.
+(It brings back the Leopard spacebar-preview gesture.)
+
+Supported: images (JPG/PNG/PDF/TIFF/GIF/BMP), plain text and source
+files, DOC/RTF/HTML, and DOCX/PPTX/XLSX/ODT/ODS/ODP (text only, for
+"which file is this?" - not a faithful rendering). Anything else does
+nothing.
+
+
+----------------------------------------
+ Setup - 3 steps
+----------------------------------------
+
+[1]  Put TigerQuickLook.app wherever you like (e.g. /Applications).
+
+[2]  *** IMPORTANT *** Turn on "Enable access for assistive devices".
+
+     The Space-key feature intercepts an unmodified Space with a
+     CGEventTap, and Tiger requires system permission for that:
+
+       System Preferences
+         -> Universal Access
+           -> tick "Enable access for assistive devices"
+              (at the bottom of the window)
+
+     Without it, the app shows a notice and quits.
+
+[3]  Launch it:
+
+       open TigerQuickLook.app
+
+     *** Always launch via `open`, a Finder double-click, or Login
+         Items. *** If you run the executable directly
+     (.../Contents/MacOS/TigerQuickLook) it does not register with the
+     GUI session and nothing responds - menu bar, Finder query, preview.
+
+     To keep it running: System Preferences -> Accounts -> Login Items,
+     add TigerQuickLook.app.
+
+     While running, a "QL" item sits at the right of the menu bar.
+     Quit from there, or run `killall TigerQuickLook`.
+
+
+----------------------------------------
+ Using it
+----------------------------------------
+
+  - Bring the Finder to the front
+  - Select one file
+  - Press Space              -> preview appears
+  - Press Space again, or
+    Esc in the window         -> closes it
+  - Arrow keys (left/right/up/down) while a preview is open
+                               -> previous / next previewable file in
+                                  the same folder (name order, stops at
+                                  the ends). Good for comparing images.
+
+  When an app other than the Finder is frontmost, Space works normally.
+
+
+----------------------------------------
+ Limitations
+----------------------------------------
+
+  - Pressing Space while inline-renaming a file in the Finder previews
+    instead of typing a space (the edit state is not visible from
+    another process). Esc undoes it.
+
+  - For about 0.3 s right after you switch to the Finder, Space may not
+    respond yet (the front-app check is polled). Selecting a file gives
+    it enough time.
+
+  - After replacing the app with a newer build, run
+    `killall TigerQuickLook` first - a leftover agent keeps the old
+    behaviour.
+
+
+----------------------------------------
+ One-shot mode (no setup needed)
+----------------------------------------
+
+    open -a TigerQuickLook.app /path/to/file.pdf
+
+  Shows one preview; closing the window quits the app. This mode does
+  not need the assistive-devices checkbox.
+
+
+----------------------------------------
+ More
+----------------------------------------
+
+  https://github.com/watermark-hd/tiger-quicklook
+  MIT License (see LICENSE.txt)
