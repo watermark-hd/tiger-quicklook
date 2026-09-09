@@ -1,3 +1,6 @@
-TigerQuickLook
+/TigerQuickLook
+/TigerQuickLook.app
 *.o
 .DS_Store
+/dist/
+*.iconset

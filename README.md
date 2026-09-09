@@ -80,6 +80,19 @@ open -a TigerQuickLook.app /path/to/file.pdf
 
 この場合はウィンドウを閉じるとアプリごと終了する。
 
+## 配布物
+
+`dist/`(gitignore対象)に、実機でビルドした `TigerQuickLook.app` と
+`必ずお読みください.txt` をまとめた zip / dmg を置いている。
+中身の PowerPC バイナリは iBook 実機ビルドなので、配布物を作り直すときは
+`build.sh` を実機で回して `TigerQuickLook.app` を取得し直すこと。
+
+アイコンは `Resources/TigerQuickLook.icns`(元データ `Resources/icon-source-1024.png`)。
+`build.sh` が `Contents/Resources/` にコピーする。
+
+開発の経緯・ハマった点・工夫した点は [`docs/開発ノート.md`](docs/開発ノート.md)
+にまとめてある(自社Web公開用の下書きも兼ねる)。
+
 
 ## これは何か
 

@@ -26,10 +26,11 @@ gcc -isysroot "$SDK" -Wall -O2 \
 
 echo "==> Assembling $APP_DIR"
 rm -rf "$APP_DIR"
-mkdir -p "$APP_DIR/Contents/MacOS"
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 cp Resources/Info.plist "$APP_DIR/Contents/Info.plist"
+cp Resources/TigerQuickLook.icns "$APP_DIR/Contents/Resources/TigerQuickLook.icns"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 
 echo "==> Done: $APP_DIR"

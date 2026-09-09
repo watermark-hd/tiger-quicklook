@@ -18,6 +18,8 @@
     <string>????</string>
     <key>CFBundleExecutable</key>
     <string>TigerQuickLook</string>
+    <key>CFBundleIconFile</key>
+    <string>TigerQuickLook</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>ja</string>
     <key>LSMinimumSystemVersion</key>
