@@ -67,12 +67,15 @@ It is v0.1 and I still add more. I know MacGizmo already exists and it supports 
 
 Update: v0.4 now.
 
-Added more formats (TIFF/GIF/BMP, plain text/.md/code files, even no-extension
-files if content looks like text, and Word/Excel/PowerPoint/OpenDocument as
-text-only, just to know what file it is). Also arrow keys now flip to next/
-previous file while a preview is open, handy for photos - and fixed a bug
-where it got stuck on a file it can not preview. App messages are English +
-Japanese both now.
+Bug fix: when you flip through files with arrow keys, if the next file could
+not be previewed (unsupported type, or a broken file), before it just got
+stuck - old preview stayed on screen, so it looked like it moved but really
+did not. Now it skips over to the next file that can be shown, and beeps if
+there is nothing left that way. Should feel much better for going through
+photos fast.
+
+A few more file types supported too, and app messages are English + Japanese
+both now.
 
 Latest here: https://github.com/watermark-hd/tiger-quicklook/releases/latest
 
@@ -80,4 +83,5 @@ Thanks, reports still welcome.
 
 ---
 
-*(短縮版。上のロング版と使い分け用に両方残す)*
+*(短縮版その3。バグ修正を先頭に・少し詳しく。対応形式は一言だけ。
+過去版は上に残す)*
