@@ -57,3 +57,34 @@ It is v0.1 and I still add more. I know MacGizmo already exists and it supports 
 - *スクリーンショット必須: 実機で「Finder で画像を選んで Space → プレビュー」の画面と、できれば PDF / TXT のプレビューも。メニューバーの「QL」も写っていると良い。*
 - *MacGizmo への言及を最後に入れてある（「車輪の再発明」対策）。消したくなければそのままで。*
 - *Leopard 未検証・G3/G5 未検証を正直に明記（過度な期待を持たせない）。*
+
+---
+
+## Update reply (v0.4 時点、2026-09-16)
+
+自分のスレッドへの返信用。コメントは付いていないが、更新報告だけ入れておく体。
+本文トーンは冒頭と同じ方針（わざと少し崩した非ネイティブ英語）。
+
+Update: now v0.4, some things changed since first post.
+
+More formats now: TIFF/GIF/BMP images, plain text like .md/.csv/.json/.xml and
+many source code extensions, and even file with no extension if the content
+looks like text. Also old Word .doc / RTF / HTML, and new Office .docx/.pptx/
+.xlsx + OpenDocument .odt/.ods/.odp - text only, just enough to know what the
+file is, not a real preview. No extra library, just textutil and unzip which
+Tiger already has.
+
+Also, while a preview window is open, arrow keys (left/right/up/down) go to
+next/previous file in same folder. Good for flip through photos fast, no need
+press Space every time. In v0.4 I fixed a bug too - if next file could not be
+previewed (broken file, or format not supported), arrow key used to get stuck
+on old preview. Now it skip to next file that works, and beep if nothing left
+that way.
+
+One more small thing: app messages (menu, dialogs) are English + Japanese both
+now. I forgot most people here read only English, sorry about that in v0.1.
+
+Still free, still MIT license, source and latest zip here:
+https://github.com/watermark-hd/tiger-quicklook/releases/latest
+
+Thanks for reading, reports (works / not works, your machine) still welcome.
