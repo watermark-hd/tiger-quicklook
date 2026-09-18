@@ -668,6 +668,19 @@ static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
 }
 
 
+// 矢印キー移動でのファイル一覧の並び順。Finderの「名前順」に近づけるため
+// NSNumericSearch を使う(例: 2.jpg が 10.jpg より前に来る、単純な文字列比較
+// だと逆になる)。ただしこれは常に名前順で並んでいる場合の話で、Finderの
+// アイコン表示を名前順以外(手動配置・種類順など)にしていると、画面上の
+// 並びとは一致しない(実機で確認: リスト表示や「名前」で整列していれば一致、
+// アイコン表示のまま名前順以外だと隣に見えるファイルとズレる)。
+static NSComparisonResult TQLCompareFilenames(id a, id b, void *context)
+{
+    return [(NSString *)a compare:(NSString *)b
+                           options:(NSCaseInsensitiveSearch | NSNumericSearch)];
+}
+
+
 @implementation TQLAppDelegate
 
 - (void)dealloc
@@ -1015,7 +1028,7 @@ static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
             }
             [keep addObject:[dir stringByAppendingPathComponent:name]];
         }
-        [keep sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+        [keep sortUsingFunction:TQLCompareFilenames context:NULL];
         [_navFiles release];
         _navFiles = [keep copy];
         [_navDir release];

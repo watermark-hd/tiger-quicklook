@@ -48,6 +48,10 @@ see what the file is). Other files do nothing.
 If Space types a space while you are renaming a file in the
 Finder, press Esc.
 
+Arrow keys move in name order. In Icon view, if that does not
+match what looks next to it on screen, arrange the window by
+Name (or switch to List view).
+
 After you update, quit the old copy first, then open the new
 one.
 

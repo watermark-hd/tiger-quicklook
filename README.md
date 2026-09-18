@@ -117,8 +117,13 @@ readable by Tiger's Finder (the icon shows up blank).
 - Pressing Space while inline-renaming a file in the Finder previews instead of
   typing a space — there is no way to see the Finder's edit state from another
   process. Esc undoes it.
-- Arrow-key sort order is plain case-insensitive by name, which differs slightly
-  from the Finder's numeric-aware sort.
+- Arrow keys always step through files in **name order** (numeric-aware, so
+  `2.jpg` comes before `10.jpg`) — the same order as a Finder window sorted or
+  arranged by Name. It does **not** know about Icon view's on-screen layout: if
+  a window is in Icon view and *not* arranged by Name (manually placed, sorted
+  by kind/date/etc.), the next file the arrow key jumps to can differ from the
+  icon that looks adjacent on screen. Switch that window to List view, or
+  Icon view arranged by Name, and the two line up.
 - After swapping in a new build, run `killall TigerQuickLook` first — a stale
   agent keeps handling Space with the old behaviour.
 
