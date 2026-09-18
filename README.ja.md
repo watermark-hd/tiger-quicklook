@@ -22,6 +22,10 @@ Quick Lookの再現)。もう一度 Space で閉じる。**この機能を使う
 **v0.4: 矢印移動で開けないファイル(壊れた xlsx 等)は飛ばして次へ、
 行き止まりはビープ。アプリ内の表示を英語＋日本語の併記に。**
 
+**v0.5: Finderへの切り替え検知を、ポーリングから Carbon の
+`kEventAppFrontSwitched`(権限不要・即時)に変更。切り替え直後の
+Space の遅延がほぼ無くなった。**
+
 ## 使い方（必ずお読みください）
 
 配布物(zip / dmg)にもこの内容を同梱する:
@@ -82,8 +86,6 @@ Finder を最前面にしてファイルを1つ選び、**Space**。もう一度
   プレビューが出てしまう。** Finder のテキスト編集中かどうかを外部プロセスから
   判定できないため。Esc で戻せる。
 - Finder 以外が最前面のときは Space は通常どおり動く(横取りしない)。
-- Finder に切り替えた直後の約0.3秒間は Space が効かないことがある(前面アプリの
-  監視がポーリングのため。下の「進捗」参照)。ファイルを選ぶ動作で十分間が空く。
 
 ### 単発で開くだけなら
 
@@ -211,12 +213,13 @@ Windowsのプレビューウィンドウは小さすぎて文字が読めない�
 - **タップは常時有効にはしない。** アクティブなイベントタップをキーイベントが
   通過すると、WindowServerがそのイベントを現在の入力ソースで確定してしまい、
   日本語入力が有効なとき`Terminal`等(`[event characters]`を直接読むアプリ)で
-  Spaceが全角スペース(U+3000)になる副作用がある(実機で確認)。対策として、
-  0.3秒ごとのポーリング(`NSTimer`)で「Finderが最前面 or プレビュー表示中」の
-  ときだけ`CGEventTapEnable`する。10.4には最前面アプリ変化を知らせる
-  NSWorkspace通知(`NSWorkspaceDidActivateApplicationNotification`は10.6以降)が
-  無いためポーリングにしている。副作用として、Finderへ切り替えた直後の
-  最大0.3秒はSpaceが効かない。
+  Spaceが全角スペース(U+3000)になる副作用がある(実機で確認)。前面アプリが
+  「Finder かつプレビュー非表示」以外になったら`CGEventTapEnable`で無効化する。
+  `NSWorkspace`の相当通知(`NSWorkspaceDidActivateApplicationNotification`)は
+  10.6以降だが、**Carbon の `kEventClassApplication`/`kEventAppFrontSwitched`
+  は 10.0 からあり、権限も不要**(実機で動作確認済み — `GetEventMonitorTarget`
+  の生キー監視とは別物)。v0.5 でこちらを使うようにし、切り替え直後の遅延は
+  ほぼ無くなった。取りこぼし対策として 2 秒間隔のポーリングは保険として残す。
 - ユーザーに見える日本語文字列は`[NSString stringWithUTF8String:]`経由で作る。
   GCC 4.0は`@"..."`リテラル内の非ASCIIを実行時エンコーディングで解釈し、
   メニュー等が文字化けするため。

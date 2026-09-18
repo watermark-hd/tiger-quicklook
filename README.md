@@ -79,13 +79,15 @@ and `unzip`, both shipped with Tiger.
 - The agent installs a `CGEventTap` (`kCGSessionEventTap`, head-insert) and, only
   while the Finder is frontmost or a preview is showing, swallows a bare Space and
   asks the Finder for its selection via `NSAppleScript`.
-- The tap is enabled/disabled by polling the front app every 0.3 s. Left always
-  on, an active tap makes the Window Server finalise key events through the
+- The tap is enabled/disabled based on which app is frontmost. Left always on,
+  an active tap makes the Window Server finalise key events through the
   current input source, which turns Space into a full-width space (U+3000) in
-  Terminal-like apps when a Japanese input source is active. Tiger has no
-  "app activated" notification (`NSWorkspaceDidActivateApplicationNotification`
-  is 10.6+), hence the poll. Side effect: Space is dead for up to ~0.3 s right
-  after switching to the Finder.
+  Terminal-like apps when a Japanese input source is active. `NSWorkspace`'s
+  front-app-changed notification is 10.6+, but Carbon's
+  `kEventClassApplication` / `kEventAppFrontSwitched` has been in Tiger since
+  10.0 and needs no special permission, so the app watches that instead and
+  reacts immediately when you switch to (or away from) the Finder. A slow
+  (2 s) poll runs alongside it purely as a fallback.
 - **Kept light for a ~1.2 GHz G4:** images are thumbnail-decoded at preview size
   (full resolution is never decoded), PDFs draw only page 1, text reads only the
   first 64 KB, nothing is prefetched, and the preview window is reused (contents

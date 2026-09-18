@@ -22,7 +22,8 @@ gcc -isysroot "$SDK" -Wall -O2 \
     -o "$APP_NAME" \
     src/main.m \
     -framework Cocoa \
-    -framework ApplicationServices
+    -framework ApplicationServices \
+    -framework Carbon
 
 echo "==> Assembling $APP_DIR"
 rm -rf "$APP_DIR"

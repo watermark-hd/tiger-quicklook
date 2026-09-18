@@ -44,6 +44,7 @@
 
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <Carbon/Carbon.h>   /* kEventAppFrontSwitched (前面アプリ切り替えの即時通知) */
 #import <stdint.h>   /* CGEventGetIntegerValueField が返す int64_t のため */
 
 
@@ -564,6 +565,7 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
     CFMachPortRef       _eventTap;
     CFRunLoopSourceRef  _tapSource;
     NSTimer           *_frontPollTimer;
+    EventHandlerRef    _frontSwitchHandler; // kEventAppFrontSwitched(即時) の後始末用
     NSStatusItem      *_statusItem;
 }
 - (void)setLaunchFilePath:(NSString *)path;
@@ -642,6 +644,29 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
 }
 
 
+#pragma mark - 前面アプリ切り替えの即時通知(Carbon Event)
+
+/*
+ * kEventClassApplication / kEventAppFrontSwitched は「前面アプリが変わった」
+ * ことを全ハンドラに即座に知らせる、10.0からある通常のCarbon Event(実機で
+ * 権限なしに動作確認済み — GetEventMonitorTargetの生キー監視とは別物で、
+ * 補助装置アクセスは要らない)。NSWorkspaceの相当通知は10.6以降にしか無い
+ * ため、Tigerではポーリングに頼るしかないと思っていたが、Carbon Event側に
+ * ちゃんと専用の仕組みがあった。
+ *
+ * これが飛んできたらすぐ pollFrontApp: を呼び、Finderへの切り替えを
+ * ほぼ遅延なく反映する(0.3秒ポーリングは、これが取りこぼした場合の
+ * 保険として残す)。
+ */
+static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
+                                       EventRef event, void *userData)
+{
+    id delegate = (id)userData;
+    [delegate performSelector:@selector(pollFrontApp:) withObject:nil];
+    return eventNotHandledErr; // 他のハンドラにも渡す
+}
+
+
 @implementation TQLAppDelegate
 
 - (void)dealloc
@@ -649,6 +674,9 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
     [_frontPollTimer invalidate];
     [_frontPollTimer release];
+    if (_frontSwitchHandler != NULL) {
+        RemoveEventHandler(_frontSwitchHandler);
+    }
     if (_tapSource != NULL) {
         CFRunLoopSourceInvalidate(_tapSource);
         CFRelease(_tapSource);
@@ -1193,7 +1221,20 @@ static CGEventRef TQLTapCallback(CGEventTapProxy proxy, CGEventType type,
     CFRunLoopAddSource(CFRunLoopGetCurrent(), _tapSource, kCFRunLoopCommonModes);
     // タップは最初は無効。pollFrontApp: が前面アプリを見て切り替える。
     CGEventTapEnable(_eventTap, false);
-    _frontPollTimer = [[NSTimer scheduledTimerWithTimeInterval:0.3
+
+    // 前面アプリの切り替えは kEventAppFrontSwitched で即座に拾う(権限不要、
+    // 実機確認済み)。ポーリングは、これを取りこぼした場合だけの保険として
+    // 間隔を伸ばして残す(以前は0.3秒間隔だったが、通知が主役になったので
+    // ここでの遅延はもう体感に響かない)。
+    EventTypeSpec frontSwitchSpec = { kEventClassApplication, kEventAppFrontSwitched };
+    OSStatus fsErr = InstallApplicationEventHandler(
+        NewEventHandlerUPP(TQLFrontSwitchHandler), 1, &frontSwitchSpec,
+        (void *)self, &_frontSwitchHandler);
+    if (fsErr != noErr) {
+        NSLog(@"Tiger QuickLook: kEventAppFrontSwitched install failed (err=%d), "
+              @"falling back to polling only", (int)fsErr);
+    }
+    _frontPollTimer = [[NSTimer scheduledTimerWithTimeInterval:(fsErr == noErr ? 2.0 : 0.3)
                                                        target:self
                                                      selector:@selector(pollFrontApp:)
                                                      userInfo:nil
