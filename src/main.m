@@ -575,6 +575,7 @@ static NSString *TQLTextFromOfficeZip(NSString *path)
 - (void)dismissPreview;
 - (void)stepPreviewBy:(int)delta;
 - (void)doStepPreviewBy:(int)delta;
+- (void)syncFinderSelectionToPath:(NSString *)path;
 // プレビューウィンドウの組み立て(表示は showPreviewForPath: がまとめて行う)
 - (BOOL)buildImageWindowForPath:(NSString *)path filename:(NSString *)filename;
 - (BOOL)buildPDFWindowForPath:(NSString *)path filename:(NSString *)filename;
@@ -1052,6 +1053,7 @@ static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
         if (![cand isEqualToString:_currentPath]
             && [self showPreviewForPath:cand keepingPlacement:YES]) {
             moved = YES;
+            [self syncFinderSelectionToPath:cand];
             break;
         }
         i += delta;
@@ -1090,6 +1092,26 @@ static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
         return nil;
     }
     return path;
+}
+
+// 矢印キーで隣のファイルに移ったとき、Finder側の選択(青いハイライト)も
+// 追従させる。これをしないと「今どれを見ているか」が分かりにくい
+// (プレビューは進んでいるのに、選択されたままのアイコンは元のファイル)。
+// 表示自体には影響しないので、失敗しても無視してよい。
+- (void)syncFinderSelectionToPath:(NSString *)path
+{
+    NSMutableString *escaped = [[path mutableCopy] autorelease];
+    TQLReplaceAll(escaped, @"\\", @"\\\\");
+    TQLReplaceAll(escaped, @"\"", @"\\\"");
+
+    NSString *src = [NSString stringWithFormat:
+        @"tell application \"Finder\"\n"
+         "  try\n"
+         "    set selection to {(POSIX file \"%@\") as alias}\n"
+         "  end try\n"
+         "end tell", escaped];
+    NSAppleScript *script = [[[NSAppleScript alloc] initWithSource:src] autorelease];
+    [script executeAndReturnError:NULL];
 }
 
 - (BOOL)shouldConsumeSpaceKey
@@ -1156,6 +1178,17 @@ static OSStatus TQLFrontSwitchHandler(EventHandlerCallRef nextHandler,
     [_statusItem setHighlightMode:YES];
 
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Tiger QuickLook"] autorelease];
+
+    // バージョン表示。実機で「古いビルドが残ったまま試している」を
+    // 見分けるための目印(このプロジェクトで何度もハマった)。
+    NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    NSMenuItem *versionItem = [menu addItemWithTitle:
+        [NSString stringWithFormat:@"Tiger QuickLook %@", version != nil ? version : @"?"]
+                                              action:NULL
+                                       keyEquivalent:@""];
+    [versionItem setEnabled:NO];
+    [menu addItem:[NSMenuItem separatorItem]];
+
     NSMenuItem *hint = [menu addItemWithTitle:
         J("Pick a file in the Finder, then press Space  /  Finder で選んで Space")
                                        action:NULL
