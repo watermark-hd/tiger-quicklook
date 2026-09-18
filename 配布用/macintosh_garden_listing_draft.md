@@ -1,4 +1,4 @@
-# Macintosh Garden 投稿フォーム用（下書き）— v0.4 時点
+# Macintosh Garden 投稿フォーム用（下書き）— v0.5 時点
 
 投稿フォームの項目に合わせて分けてあります。英語。わざと少し崩した非ネイティブ英語に
 してあります（MacRumorsの投稿文と同じトーン。完璧すぎる英文だと「AIが書いたのか」と
@@ -35,7 +35,8 @@ light enough to keep running on an old G4/G3.
 It runs as a small background agent (no Dock icon, just a "QL" item in the menu
 bar). Finder in front + one file selected + Space -> a resizable preview window.
 Press Space again, or Esc, to close. Arrow keys move to the next/previous file
-while a preview is open, same feeling as Leopard's Quick Look.
+while a preview is open (Finder's own selection follows along too), same feeling
+as Leopard's Quick Look.
 
 Supported so far: JPG / PNG / PDF / TIFF / GIF / BMP, plain text (.txt, .md, .csv,
 .json, and many source file types), old Office files (.doc/.rtf/.html, through
@@ -51,8 +52,9 @@ Free, MIT license, source on GitHub: https://github.com/watermark-hd/tiger-quick
 
 Download page (with the readme): https://oldmac.policy-log.jp/apps/tiger-quicklook
 
-Still v0.4 and I keep adding to it. Feedback and "works / doesn't work on my
-machine" reports are welcome.
+Still v0.5 and I keep adding to it - the switch-to-Finder lag some people hit
+early on is gone now, and file order matches the Finder's own Name sort. Feedback
+and "works / doesn't work on my machine" reports are welcome.
 
 ## Screenshot(s)
 
