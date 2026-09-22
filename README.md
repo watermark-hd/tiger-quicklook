@@ -88,6 +88,15 @@ and `unzip`, both shipped with Tiger.
   10.0 and needs no special permission, so the app watches that instead and
   reacts immediately when you switch to (or away from) the Finder. A slow
   (2 s) poll runs alongside it purely as a fallback.
+- Closing a preview hands focus back to the Finder with Carbon's
+  `SetFrontProcess`, not `-[NSWorkspace launchApplication:]`. The latter turned
+  out to behave like a Dock-icon click: if the Finder had zero open document
+  windows — which is the normal state when you're just looking at the Desktop —
+  it would react by opening a new window (whatever "New Finder windows show" is
+  set to, typically the startup disk). Folders viewed in an actual window
+  (Downloads, Pictures, ...) never showed this, since activating just brought
+  that window forward. `SetFrontProcess` switches the frontmost process without
+  that side effect.
 - **Kept light for a ~1.2 GHz G4:** images are thumbnail-decoded at preview size
   (full resolution is never decoded), PDFs draw only page 1, text reads only the
   first 64 KB, nothing is prefetched, and the preview window is reused (contents

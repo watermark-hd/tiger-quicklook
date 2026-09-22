@@ -680,6 +680,42 @@ static NSComparisonResult TQLCompareFilenames(id a, id b, void *context)
                            options:(NSCaseInsensitiveSearch | NSNumericSearch)];
 }
 
+/*
+ * プレビューを閉じたときにFinderへフォーカスを戻す。
+ *
+ * 以前は -[NSWorkspace launchApplication:@"Finder"] を使っていたが、これは
+ * 「Dockアイコンをクリックした」のと同じ経路を通るらしく、Finderがウィンドウを
+ * 1枚も開いていない状態(デスクトップを見ているだけの状態はこれに当たる)だと、
+ * Finderの「新規Finderウインドウで表示するもの」設定に従って新しいウィンドウ
+ * (既定だとコンピュータ=HDDのルート)を勝手に開いてしまう(実機で確認)。
+ * ダウンロードやピクチャーのようにフォルダをウィンドウで開いて見ているときは
+ * 単に前面に来るだけなので、症状が起きない。
+ *
+ * Carbonの SetFrontProcess はプロセスを前面にするだけで、この「開き直し」の
+ * 副作用を伴わない。Finderのプロセスシリアル番号は GetNextProcess で全プロセス
+ * を舐めて名前が"Finder"のものを探す(日本語環境でも"Finder"のまま)。
+ * 見つからない/失敗した場合は元のlaunchApplication:にフォールバックする。
+ */
+static void TQLActivateFinderWithoutReopening(void)
+{
+    ProcessSerialNumber psn = { kNoProcess, kNoProcess };
+    while (GetNextProcess(&psn) == noErr) {
+        CFStringRef name = NULL;
+        if (CopyProcessName(&psn, &name) == noErr && name != NULL) {
+            BOOL isFinder = (CFStringCompare(name, CFSTR("Finder"), 0) == kCFCompareEqualTo);
+            CFRelease(name);
+            if (isFinder) {
+                if (SetFrontProcess(&psn) == noErr) {
+                    return;
+                }
+                break;
+            }
+        }
+    }
+    // 見つからない/失敗したときの保険。
+    [[NSWorkspace sharedWorkspace] launchApplication:@"Finder"];
+}
+
 
 @implementation TQLAppDelegate
 
@@ -984,8 +1020,10 @@ static NSComparisonResult TQLCompareFilenames(id a, id b, void *context)
     [_navDir release];   _navDir = nil;
     if (_agentMode) {
         [_window orderOut:nil];
-        // フォーカスをFinderに返す(すでに起動済みのFinderをactivateするだけ)。
-        [[NSWorkspace sharedWorkspace] launchApplication:@"Finder"];
+        // フォーカスをFinderに返す。「開き直し」の副作用を避けるため
+        // SetFrontProcess を使う(詳細はTQLActivateFinderWithoutReopeningの
+        // コメント参照)。
+        TQLActivateFinderWithoutReopening();
     } else {
         // 使い捨て単発モード: 閉じたら applicationShouldTerminate... で終了。
         [_window close];

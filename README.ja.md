@@ -26,6 +26,9 @@ Quick Lookの再現)。もう一度 Space で閉じる。**この機能を使う
 `kEventAppFrontSwitched`(権限不要・即時)に変更。切り替え直後の
 Space の遅延がほぼ無くなった。**
 
+**v0.6: デスクトップでプレビューを閉じると Finder のウィンドウ(HDDルート)が
+勝手に開くバグを修正。**
+
 ## 使い方（必ずお読みください）
 
 配布物(zip / dmg)にもこの内容を同梱する:
@@ -214,7 +217,7 @@ Windowsのプレビューウィンドウは小さすぎて文字が読めない�
   `CGEventTap`(`kCGSessionEventTap`, head-insert)で修飾なしSpaceのキーダウンを
   監視し、「Finderが最前面 かつ プレビュー非表示」のときだけ横取りして、
   `NSAppleScript`でFinderの選択項目を取得しプレビュー。表示中のSpace/Escで閉じる。
-  Finderへのフォーカス返却は`-[NSWorkspace launchApplication:@"Finder"]`。
+  Finderへのフォーカス返却は Carbon の `SetFrontProcess`(v0.6、詳細は下)。
   タップが`kCGEventTapDisabledByTimeout`で無効化されたら貼り直す。
 - **タップは常時有効にはしない。** アクティブなイベントタップをキーイベントが
   通過すると、WindowServerがそのイベントを現在の入力ソースで確定してしまい、
